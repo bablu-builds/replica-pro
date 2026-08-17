@@ -1,0 +1,48 @@
+"""Shared domain types and error types."""
+from .types import (
+    TaskPlan,
+    PlannedTask,
+    TaskStatus,
+    WorkerStatus,
+    ExecutionResult,
+    MergeResult,
+    OrchestratorRunSummary,
+    RunState,
+    FileArtifact,
+    WorkerRecord,
+)
+from .errors import (
+    RMAOError,
+    ConfigError,
+    ValidationError,
+    ProviderError,
+    LLMError,
+    ExecutionError,
+    AgentPoolError,
+    GitHubError,
+    PlanError,
+    SecretRedactionError,
+)
+
+__all__ = [
+    "TaskPlan",
+    "PlannedTask",
+    "TaskStatus",
+    "WorkerStatus",
+    "ExecutionResult",
+    "MergeResult",
+    "OrchestratorRunSummary",
+    "RunState",
+    "FileArtifact",
+    "WorkerRecord",
+    "RMAOError",
+    "ConfigError",
+    "ValidationError",
+    "ProviderError",
+    "LLMError",
+    "ExecutionError",
+    "AgentPoolError",
+    "GitHubError",
+    "PlanError",
+    "SecretRedactionError",
+]
