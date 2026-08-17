@@ -1,6 +1,6 @@
 # 🤖 Replica-Pro: Multi-Agent Orchestrator
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![CI](https://github.com/bablu-builds/replica-pro/actions/workflows/ci.yml/badge.svg)](https://github.com/bablu-builds/replica-pro/actions)
 
