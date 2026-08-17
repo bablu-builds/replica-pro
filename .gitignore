@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Uploaded archive snapshots are not runtime assets
+/attached_assets/*.zip

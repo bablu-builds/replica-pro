@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: rmao
+    description: Replit Multi-Agent Orchestrator operations
 paths:
   /healthz:
     get:
@@ -24,7 +26,155 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /rmao/healthz:
+    get:
+      operationId: rmaoHealthCheck
+      tags: [rmao]
+      summary: Check RMAO readiness
+      description: Returns the current safe execution mode and provider readiness.
+      responses:
+        "200":
+          description: RMAO readiness
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RmaoHealth"
+  /rmao/runs:
+    post:
+      operationId: createRmaoRun
+      tags: [rmao]
+      summary: Start an RMAO run
+      description: Starts a mock or dry-run orchestration in the background.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RmaoRunInput"
+      responses:
+        "202":
+          description: Run accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RmaoRun"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rmao/runs/{runId}:
+    get:
+      operationId: getRmaoRun
+      tags: [rmao]
+      summary: Get run status
+      parameters:
+        - $ref: "#/components/parameters/RmaoRunId"
+      responses:
+        "200":
+          description: Run status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RmaoRun"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rmao/runs/{runId}/plan:
+    get:
+      operationId: getRmaoPlan
+      tags: [rmao]
+      summary: Get the validated task plan
+      parameters:
+        - $ref: "#/components/parameters/RmaoRunId"
+      responses:
+        "200":
+          description: Validated task plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RmaoPlan"
+        "404":
+          description: Run or plan not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rmao/runs/{runId}/tasks:
+    get:
+      operationId: getRmaoTasks
+      tags: [rmao]
+      summary: Get task execution results
+      parameters:
+        - $ref: "#/components/parameters/RmaoRunId"
+      responses:
+        "200":
+          description: Task execution results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RmaoTask"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rmao/runs/{runId}/cancel:
+    post:
+      operationId: cancelRmaoRun
+      tags: [rmao]
+      summary: Cancel a running orchestration
+      parameters:
+        - $ref: "#/components/parameters/RmaoRunId"
+      responses:
+        "200":
+          description: Cancelled or already finished run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RmaoRun"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rmao/runs/{runId}/result:
+    get:
+      operationId: getRmaoResult
+      tags: [rmao]
+      summary: Get final sanitized run result
+      parameters:
+        - $ref: "#/components/parameters/RmaoRunId"
+      responses:
+        "200":
+          description: Final result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RmaoResult"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
+  parameters:
+    RmaoRunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +183,186 @@ components:
           type: string
       required:
         - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    RmaoHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ready, degraded]
+        mode:
+          type: string
+          enum: [mock, dry_run, real]
+        provider:
+          type: string
+        message:
+          type: string
+      required: [status, mode, provider, message]
+    RmaoRunInput:
+      type: object
+      properties:
+        request:
+          type: string
+          minLength: 1
+          maxLength: 10000
+        mode:
+          type: string
+          enum: [mock, dry_run, real]
+          default: mock
+        provider:
+          type: string
+          enum: [fake, openai, deepseek, kimi, glm]
+          default: fake
+        model:
+          type: string
+          minLength: 1
+          maxLength: 128
+          default: mock-model
+        taskCount:
+          type: integer
+          minimum: 1
+          maximum: 16
+          default: 4
+        concurrency:
+          type: integer
+          minimum: 1
+          maximum: 16
+          default: 4
+        timeoutSeconds:
+          type: integer
+          minimum: 1
+          maximum: 600
+          default: 300
+      required: [request]
+    RmaoTaskPlan:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        dependencies:
+          type: array
+          items:
+            type: string
+        expectedOutputFiles:
+          type: array
+          items:
+            type: string
+      required: [id, name, description, dependencies, expectedOutputFiles]
+    RmaoPlan:
+      type: object
+      properties:
+        summary:
+          type: string
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/RmaoTaskPlan"
+      required: [summary, tasks]
+    RmaoTask:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed, cancelled]
+        worker:
+          type: [string, "null"]
+        dependencies:
+          type: array
+          items:
+            type: string
+        durationMs:
+          type: integer
+          minimum: 0
+        outputFiles:
+          type: array
+          items:
+            type: string
+        error:
+          type: [string, "null"]
+      required: [id, name, description, status, worker, dependencies, durationMs, outputFiles, error]
+    RmaoRun:
+      type: object
+      properties:
+        id:
+          type: string
+        request:
+          type: string
+        mode:
+          type: string
+          enum: [mock, dry_run, real]
+        provider:
+          type: string
+        model:
+          type: string
+        status:
+          type: string
+          enum: [created, planning, running, completed, partial_failure, cancelled, failed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        completedTasks:
+          type: integer
+          minimum: 0
+        taskCount:
+          type: integer
+          minimum: 1
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: [string, "null"]
+          format: date-time
+        durationMs:
+          type: [integer, "null"]
+          minimum: 0
+        correlationId:
+          type: string
+        warningCount:
+          type: integer
+          minimum: 0
+      required:
+        [id, request, mode, provider, model, status, progress, completedTasks, taskCount, startedAt, finishedAt, durationMs, correlationId, warningCount]
+    RmaoResult:
+      type: object
+      properties:
+        runId:
+          type: string
+        summary:
+          type: string
+        repository:
+          type: [string, "null"]
+        pullRequests:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        errors:
+          type: array
+          items:
+            type: string
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/RmaoTask"
+      required: [runId, summary, repository, pullRequests, warnings, errors, tasks]
 

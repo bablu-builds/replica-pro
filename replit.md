@@ -1,15 +1,21 @@
-# [Project name]
+# Replit Multi-Agent Orchestrator
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+RMAO is a Python backend that plans project work, executes independent tasks
+through bounded workers, and publishes successful artifacts through mock or
+GitHub branch/pull-request workflows.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `cd replica-pro && python -m rmao.cli.main serve --host 0.0.0.0 --port 8000` — run the RMAO HTTP API
+- `cd replica-pro && rmao plan "Build a project" --tasks 3` — create a plan
+- `cd replica-pro && rmao run "Build a project" --tasks 3` — run mock orchestration
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env for the existing API server: `DATABASE_URL` — Postgres connection string
+- RMAO configuration: see `replica-pro/.env.example`
 
 ## Stack
 
@@ -22,23 +28,39 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `replica-pro/src/rmao/config/` — typed environment configuration and startup validation
+- `replica-pro/src/rmao/planner/` — LLM-backed task planning and safety validation
+- `replica-pro/src/rmao/pool/` and `executor/` — worker leasing and dependency-aware parallel execution
+- `replica-pro/src/rmao/execution/` — mock execution and explicit Replit-provider boundary
+- `replica-pro/src/rmao/github/` — mock and GitHub REST branch/PR workflow
+- `replica-pro/src/rmao/orchestration/` — dependency-injected composition root
+- `replica-pro/src/rmao/api/` and `cli/` — HTTP and command-line entry points
+- `replica-pro/tests/` — RMAO unit and integration coverage
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Mock mode is deterministic and never runs arbitrary commands or accesses the network.
+- The Replit execution provider fails explicitly until an official execution API is available.
+- GitHub publishing is provider-neutral; real mode uses the GitHub REST API and mock mode stays in memory.
+- HTTP handling uses the standard library to keep the standalone Python backend lightweight.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+RMAO supports planning, dry-run inspection, bounded parallel task execution,
+progress events, cancellation requests, safe mock artifacts, and optional
+GitHub pull-request publication.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep the orchestrator isolated under `replica-pro`; do not overwrite unrelated workspace artifacts.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Use `RMAO_MODE=mock` for local runs without credentials.
+- Real mode requires the provider-specific LLM secret plus `GITHUB_TOKEN`,
+  `GITHUB_OWNER`, and `GITHUB_REPOSITORY`.
+- The standalone Python service is not automatically the existing Node API
+  workflow; start it with the RMAO CLI command when needed.
 
 ## Pointers
 
