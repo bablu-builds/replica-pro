@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import our modules
-from rmao.api.webhooks import router as webhooks_router
+from src.rmao.api.webhooks import router
 from rmao.middleware import RateLimitMiddleware
-from rmao.core.executor import Orchestrator
-from rmao.config import settings
+from rmao.core.execute import Orchestrator
+from rmao.config import load_config
+
+settings = load_config()
 
 app = FastAPI(
     title="Replica-Pro Orchestrator",
@@ -26,12 +28,12 @@ app.add_middleware(
 app.add_middleware(RateLimitMiddleware)
 
 # ✅ Register Webhooks Router
-app.include_router(webhooks_router, prefix="/v1")
+app.include_router(router, prefix="/v1")
 
 # Health check endpoint
 @app.get("/health")
 async def health():
-    return {"status": "ok", "mode": settings.RMAO_MODE}
+    return {"status": "ok", "mode": settings.mode}
 
 # Run endpoint
 @app.post("/v1/run")
