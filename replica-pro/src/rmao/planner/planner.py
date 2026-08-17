@@ -26,7 +26,7 @@ class TaskPlanner:
         """Generate a validated task plan."""
         num = self._clamp_num_tasks(num_tasks or self.DEFAULT_TASKS)
         prompt = build_planner_prompt(user_request, num)
-        logger.info("planning_started", user_request=user_request[:100], num_tasks=num)
+        logger.info("planning_started", request_chars=len(user_request), num_tasks=num)
 
         try:
             response = await self.llm.generate_structured(
@@ -39,7 +39,7 @@ class TaskPlanner:
 
         plan = self._parse_response(response.data)
         plan = self.validator.validate(plan)
-        logger.info("planning_completed", task_count=len(plan.tasks), summary=plan.summary)
+        logger.info("planning_completed", task_count=len(plan.tasks))
         return plan
 
     def _parse_response(self, data: dict[str, Any]) -> TaskPlan:

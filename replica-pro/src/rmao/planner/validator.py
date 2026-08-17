@@ -13,6 +13,7 @@ class PlanValidator:
         self._check_duplicate_ids(plan)
         self._check_duplicate_slugs(plan)
         self._check_dependencies(plan)
+        self._check_cycles(plan)
         self._check_empty_descriptions(plan)
         self._check_overlapping_files(plan)
         return plan
@@ -43,6 +44,25 @@ class PlanValidator:
                     raise PlanError(
                         f"Task '{t.task_id}' depends on itself"
                     )
+
+    def _check_cycles(self, plan: TaskPlan) -> None:
+        graph = {task.task_id: task.dependencies for task in plan.tasks}
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(task_id: str) -> None:
+            if task_id in visiting:
+                raise PlanError(f"Dependency cycle detected at task '{task_id}'")
+            if task_id in visited:
+                return
+            visiting.add(task_id)
+            for dependency in graph[task_id]:
+                visit(dependency)
+            visiting.remove(task_id)
+            visited.add(task_id)
+
+        for task_id in graph:
+            visit(task_id)
 
     def _check_empty_descriptions(self, plan: TaskPlan) -> None:
         for t in plan.tasks:

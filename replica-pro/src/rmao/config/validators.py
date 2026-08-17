@@ -26,6 +26,10 @@ def validate_config(config: RMAOConfig) -> None:
 
         if not config.github.owner:
             errors.append("GitHub owner is required for real mode. Set GITHUB_OWNER.")
+        if not config.github.repository:
+            errors.append(
+                "GitHub repository is required for real mode. Set GITHUB_REPOSITORY."
+            )
 
     if config.mode == "dry_run":
         if config.llm.provider != "fake" and not config.llm.api_key:

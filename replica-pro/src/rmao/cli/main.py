@@ -1,68 +1,71 @@
-"""Command-line entry point for the orchestrator's planning workflow."""
+"""Command-line entry point for planning, execution, and HTTP serving."""
 from __future__ import annotations
 
 import argparse
 import asyncio
+import os
+import sys
 
 from ..config import load_config, validate_config
-from ..llm.fake_adapter import FakeLLMAdapter
-from ..planner.planner import TaskPlanner
+from ..api.server import serve
+from ..logging.redaction import setup_logging
+from ..orchestration.orchestrator import build_orchestrator
 
 
-def _demo_response(task_count: int) -> dict[str, object]:
-    tasks = [
-        {
-            "task_id": f"task-{index}",
-            "name": f"Implementation task {index}",
-            "description": f"Implement the next independent part of the request.",
-            "responsibilities": ["Implement and verify the assigned scope"],
-            "dependencies": [],
-            "technology_constraints": [],
-            "expected_output_files": [],
-            "port": None,
-            "branch_slug": f"task-{index}",
-            "acceptance_criteria": ["The assigned scope is implemented and verified"],
-        }
-        for index in range(1, task_count + 1)
-    ]
-    return {
-        "tasks": tasks,
-        "summary": "Mock plan generated successfully.",
-    }
-
-
-async def _run_plan(request: str, task_count: int) -> str:
+def _config():
     config = load_config()
     validate_config(config)
-    adapter = FakeLLMAdapter(
-        model="mock-model",
-        structured_response=_demo_response(task_count),
-    )
-    plan = await TaskPlanner(adapter).plan(request, task_count)
-    return TaskPlanner(adapter).summarize(plan)
+    setup_logging(config.log_level, config.log_redact_secrets)
+    return config
 
 
 def main(argv: list[str] | None = None) -> None:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] not in {"plan", "run", "serve", "validate-config", "-h", "--help"}:
+        argv.insert(0, "plan")
     parser = argparse.ArgumentParser(
         prog="rmao",
         description="Replit Multi-Agent Orchestrator",
     )
-    parser.add_argument(
-        "request",
-        nargs="?",
-        default="Build a small project",
-        help="Project request to decompose into parallel tasks",
-    )
-    parser.add_argument(
-        "--tasks",
-        type=int,
-        default=4,
-        help="Number of tasks to generate (1-16)",
-    )
+    subparsers = parser.add_subparsers(dest="command", required=False)
+    for command in ("plan", "run"):
+        command_parser = subparsers.add_parser(command)
+        command_parser.add_argument("request", help="Project request")
+        command_parser.add_argument("--tasks", type=int, default=4)
+        if command == "run":
+            command_parser.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Plan only; do not execute or publish",
+            )
+    serve_parser = subparsers.add_parser("serve")
+    serve_parser.add_argument("--host", default="0.0.0.0")
+    serve_parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")))
+    subparsers.add_parser("validate-config")
     args = parser.parse_args(argv)
+    if args.command == "validate-config":
+        _config()
+        print("Configuration is valid.")
+        return
+    if args.command == "serve":
+        serve(_config(), args.host, args.port)
+        return
+    if args.command not in {"plan", "run"}:
+        parser.print_help()
+        return
     if not 1 <= args.tasks <= 16:
         parser.error("--tasks must be between 1 and 16")
-    print(asyncio.run(_run_plan(args.request, args.tasks)))
+    config = _config()
+    if args.command == "run" and args.dry_run:
+        config.mode = "dry_run"
+    if args.tasks > config.max_tasks:
+        parser.error(f"--tasks cannot exceed configured RMAO_MAX_TASKS ({config.max_tasks})")
+    orchestrator = build_orchestrator(config, args.tasks)
+    if args.command == "plan":
+        result = asyncio.run(orchestrator.plan(args.request, args.tasks))
+    else:
+        result = asyncio.run(orchestrator.run(args.request, args.tasks))
+    print(result.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":

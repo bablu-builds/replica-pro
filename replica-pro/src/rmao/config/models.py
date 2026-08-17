@@ -22,8 +22,13 @@ class LLMConfig(BaseModel):
 class GitHubConfig(BaseModel):
     token: str | None = None
     owner: str | None = None
+    repository: str | None = None
+    base_url: str = "https://api.github.com"
+    base_branch: str = "main"
     repo_prefix: str = Field(default="rmao")
     private: bool = True
+    create_pull_requests: bool = True
+    merge_pull_requests: bool = False
 
 
 class ExecutionConfig(BaseModel):
@@ -32,6 +37,8 @@ class ExecutionConfig(BaseModel):
     max_file_size_bytes: int = Field(default=1024 * 1024)  # 1MB
     command_timeout: int = Field(default=300, ge=1)
     allowed_commands: list[str] = Field(default_factory=lambda: ["python", "npm", "pytest"])
+    workspace_dir: str = "."
+    mock_delay_ms: int = Field(default=0, ge=0, le=10_000)
 
     @field_validator("provider")
     @classmethod
