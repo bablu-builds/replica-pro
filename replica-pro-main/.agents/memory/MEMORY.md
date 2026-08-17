@@ -1,1 +1,0 @@
-- [Standalone project runs](standalone-project-runs.md) — Uploaded non-web projects may need their declared entry point verified before they can be run.
