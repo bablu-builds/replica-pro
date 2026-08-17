@@ -365,4 +365,3 @@ components:
           items:
             $ref: "#/components/schemas/RmaoTask"
       required: [runId, summary, repository, pullRequests, warnings, errors, tasks]
-
