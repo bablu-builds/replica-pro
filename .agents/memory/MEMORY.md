@@ -1,1 +1,2 @@
 - [Standalone project runs](standalone-project-runs.md) — Uploaded non-web projects may need their declared entry point verified before they can be run.
+- [GitHub PAT Git authentication](github-pat-git-auth.md) — Git transport needs Basic auth with the x-access-token username even when API auth works.
