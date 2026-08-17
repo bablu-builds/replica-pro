@@ -11,74 +11,74 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]
+        python-version: ["3.11", "3.12"]  # ✅ Sirf ek baar define karein
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install dependencies
-      run: |
-        cd replica-pro
-        pip install -e '.[dev]'
-    
-    - name: Lint with flake8
-      run: |
-        cd replica-pro
-        pip install flake8
-        flake8 src --count --select=E9,F63,F7,F82 --show-source --statistics
-    
-    - name: Test with pytest
-      run: |
-        cd replica-pro
-        python -m pytest
-    
-    - name: Compile check
-      run: |
-        cd replica-pro
-        python -m compileall -q src
-    
-    - name: Build Docker Image (Test)
-      run: |
-        docker build -t replica-pro:test .
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          cd replica-pro
+          pip install -e '.[dev]'
+
+      - name: Lint with flake8
+        run: |
+          cd replica-pro
+          pip install flake8
+          flake8 src --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Test with pytest
+        run: |
+          cd replica-pro
+          python -m pytest
+
+      - name: Compile check
+        run: |
+          cd replica-pro
+          python -m compileall -q src
+
+      - name: Build Docker Image (Test)
+        run: |
+          docker build -t replica-pro:test .
 
   deploy:
     runs-on: ubuntu-latest
     needs: test
     if: github.ref == 'refs/heads/main'
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-    
-    - name: Install dependencies
-      run: |
-        cd replica-pro
-        pip install -e '.[dev]'
-    
-    - name: Push to GitHub (with REPO_TOKEN)
-      env:
-        REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
-      run: |
-        git remote set-url origin https://$REPO_TOKEN@github.com/bablu-builds/replica-pro.git
-        git push origin main --force-with-lease
-    
-    - name: Deploy to Replit (Optional)
-      env:
-        REPLIT_SID_1: ${{ secrets.REPLIT_SID_1 }}
-        REPLIT_SID_2: ${{ secrets.REPLIT_SID_2 }}
-        REPLIT_SID_3: ${{ secrets.REPLIT_SID_3 }}
-        REPLIT_SID_4: ${{ secrets.REPLIT_SID_4 }}
-      run: |
-        cd replica-pro
-        RMAO_MODE=real RMAO_LLM_PROVIDER=openai rmao run "Build a Todo App" --tasks 4 || echo "Skipping Replit deploy"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd replica-pro
+          pip install -e '.[dev]'
+
+      - name: Push to GitHub (with REPO_TOKEN)
+        env:
+          REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
+        run: |
+          git remote set-url origin https://$REPO_TOKEN@github.com/bablu-builds/replica-pro.git
+          git push origin main --force-with-lease
+
+      - name: Deploy to Replit (Optional)
+        env:
+          REPLIT_SID_1: ${{ secrets.REPLIT_SID_1 }}
+          REPLIT_SID_2: ${{ secrets.REPLIT_SID_2 }}
+          REPLIT_SID_3: ${{ secrets.REPLIT_SID_3 }}
+          REPLIT_SID_4: ${{ secrets.REPLIT_SID_4 }}
+        run: |
+          cd replica-pro
+          RMAO_MODE=real RMAO_LLM_PROVIDER=openai rmao run "Build a Todo App" --tasks 4 || echo "Skipping Replit deploy"
