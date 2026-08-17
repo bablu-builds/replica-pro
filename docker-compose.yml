@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: replica-pro-api
+    ports:
+      - "8000:8000"
+    environment:
+      - RMAO_MODE=${RMAO_MODE:-real}
+      - RMAO_LLM_PROVIDER=${RMAO_LLM_PROVIDER}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_OWNER=${GITHUB_OWNER}
+      - ACCOUNT1_SID=${ACCOUNT1_SID}
+      - ACCOUNT2_SID=${ACCOUNT2_SID}
+      - ACCOUNT3_SID=${ACCOUNT3_SID}
+      - ACCOUNT4_SID=${ACCOUNT4_SID}
+    env_file:
+      - ./replica-pro/.env
+    volumes:
+      - ./replica-pro/src:/app/replica-pro/src  # Hot-reload for dev
+    restart: unless-stopped
+    networks:
+      - rmao-net
+
+  dashboard:
+    image: python:3.11-slim
+    container_name: replica-pro-dashboard
+    working_dir: /app
+    command: streamlit run src/rmao/ui/dashboard.py --server.port 8501 --server.address 0.0.0.0
+    volumes:
+      - ./replica-pro:/app
+    env_file:
+      - ./replica-pro/.env
+    ports:
+      - "8501:8501"
+    depends_on:
+      - orchestrator
+    restart: unless-stopped
+    networks:
+      - rmao-net
+
+networks:
+  rmao-net:
+    driver: bridge
