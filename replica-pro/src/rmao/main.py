@@ -1,13 +1,19 @@
-from fastapi import FastAPI
+"""FastAPI application entry point."""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-# Import our modules
-from src.rmao.api.webhooks import router
-from rmao.middleware import RateLimitMiddleware
-from rmao.core.execute import Orchestrator
+from rmao.api.webhooks import router
 from rmao.config import load_config
+from rmao.core.execute import build_orchestrator
+from rmao.middleware import RateLimitMiddleware
 
 settings = load_config()
+orchestrator = build_orchestrator(settings)
 
 app = FastAPI(
     title="Replica-Pro Orchestrator",
@@ -24,20 +30,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Add Rate Limiting Middleware
 app.add_middleware(RateLimitMiddleware)
-
-# ✅ Register Webhooks Router
+app.state.orchestrator = orchestrator
 app.include_router(router, prefix="/v1")
 
-# Health check endpoint
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "mode": settings.mode}
 
-# Run endpoint
+
 @app.post("/v1/run")
-async def run_orchestrator(query: str, tasks: int = 4):
-    orch = Orchestrator()
-    result = await orch.run(query)
-    return {"status": "success", "repo_url": result}
+async def run_orchestrator(
+    query: Annotated[str, Query(min_length=1)],
+    tasks: Annotated[int, Query(ge=1, le=16)] = 4,
+):
+    """Run orchestration and return its complete typed summary."""
+    result = await orchestrator.run(query.strip(), task_count=tasks)
+    return result.model_dump(mode="json")
