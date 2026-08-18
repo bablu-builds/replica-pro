@@ -1,0 +1,196 @@
+‎replica-pro/src/rmao/api/webhooks.py‎
++71
+-27
+Lines changed: 71 additions & 27 deletions
+Original file line number	Diff line number	Diff line change
+@@ -1,43 +1,87 @@
+"""FastAPI webhook endpoints."""
+from __future__ import annotations
+import hashlib
+import hmac
+import json
+import os
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
+from typing import Any
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from rmao.core.execute import Orchestrator
+
+router = APIRouter(prefix="/v1/webhooks", tags=["webhooks"])
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "default-secret-change-me")
+router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+
+@router.post("/github")
+async def github_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Trigger orchestrator via GitHub webhook (push event)."""
+    # Validate signature (simplified)
+    token = request.headers.get("X-Orchestrator-Token")
+    if token != WEBHOOK_SECRET:
+        raise HTTPException(status_code=401, detail="Invalid webhook token")
+    """Trigger the configured orchestrator from a GitHub webhook."""
+    body = await request.body()
+    _validate_webhook(request, body)
+
+    payload = await request.json()
+    
+    # Extract project query from commit message or specific file
+    commits = payload.get("commits", [])
+    query = None
+    for commit in commits:
+        message = commit.get("message", "")
+        if "[RMAO]" in message:
+            query = message.replace("[RMAO]", "").strip()
+            break
+    try:
+        payload = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from error
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Webhook payload must be an object")
+
+    query = _query_from_payload(payload)
+    if not query:
+        raise HTTPException(status_code=400, detail="No [RMAO] directive found in commit")
+
+    # Run in background (don't block webhook response)
+    background_tasks.add_task(run_orchestrator_background, query)
+    orchestrator = getattr(request.app.state, "orchestrator", None)
+    if not isinstance(orchestrator, Orchestrator):
+        raise HTTPException(status_code=503, detail="Orchestrator is not configured")
+    background_tasks.add_task(run_orchestrator_background, orchestrator, query)
+    return {"status": "accepted", "message": "Orchestration started", "query": query}
+
+
+async def run_orchestrator_background(query: str):
+    """Background task to avoid timeout."""
+    orch = Orchestrator()
+def _query_from_payload(payload: dict[str, Any]) -> str | None:
+    """Extract the first ``[RMAO]`` directive from a push payload."""
+    commits = payload.get("commits", [])
+    if not isinstance(commits, list):
+        return None
+    for commit in commits:
+        if not isinstance(commit, dict):
+            continue
+        message = commit.get("message", "")
+        if isinstance(message, str) and "[RMAO]" in message:
+            query = message.replace("[RMAO]", "", 1).strip()
+            if query:
+                return query
+    return None
+def _validate_webhook(request: Request, body: bytes) -> None:
+    """Validate a shared token or GitHub's HMAC-SHA256 signature."""
+    secret = os.getenv("WEBHOOK_SECRET")
+    if not secret:
+        raise HTTPException(status_code=503, detail="Webhook secret is not configured")
+    token = request.headers.get("X-Orchestrator-Token")
+    if token and hmac.compare_digest(token, secret):
+        return
+    signature = request.headers.get("X-Hub-Signature-256")
+    expected = "sha256=" + hmac.new(
+        secret.encode("utf-8"), body, hashlib.sha256
+    ).hexdigest()
+    if signature and hmac.compare_digest(signature, expected):
+        return
+    raise HTTPException(status_code=401, detail="Invalid webhook credentials")
+async def run_orchestrator_background(
+    orchestrator: Orchestrator, query: str
+) -> None:
+    """Run a webhook request without blocking the webhook response."""
+    try:
+        result = await orch.run(query)
+        print(f"✅ Background task completed: {result}")
+    except Exception as e:
+        print(f"❌ Background task failed: {e}")
+        await orchestrator.run(query)
+    except Exception as error:
+        # BackgroundTasks cannot return an exception to the webhook caller.
+        print(f"Background webhook orchestration failed: {error}")
+‎replica-pro/src/rmao/core/__init__.py‎
++2
+-2
+Lines changed: 2 additions & 2 deletions
+Original file line number	Diff line number	Diff line change
+@@ -1,5 +1,5 @@
+"""Core orchestration primitives."""
+
+from .execute import Orchestrator
+from .execute import Orchestrator, build_orchestrator
+
+__all__ = ["Orchestrator"]
+__all__ = ["Orchestrator", "build_orchestrator"]
+‎replica-pro/src/rmao/core/execute.py‎
++10
+-3
+Lines changed: 10 additions & 3 deletions
+Original file line number	Diff line number	Diff line change
+@@ -1,3 +1,10 @@
+class Orchestrator:
+    async def run(self, query, tasks=4):
+        return {"status": "success"}
+"""Compatibility exports for the orchestration composition root.
+The implementation lives in :mod:`rmao.orchestration.orchestrator`; this
+module keeps the historic ``rmao.core.execute`` import path working without
+maintaining a second, incomplete orchestrator implementation.
+"""
+from ..orchestration.orchestrator import Orchestrator, build_orchestrator
+__all__ = ["Orchestrator", "build_orchestrator"]
+‎replica-pro/src/rmao/main.py‎
++21
+-14
+Lines changed: 21 additions & 14 deletions
+Original file line number	Diff line number	Diff line change
+@@ -1,13 +1,19 @@
+from fastapi import FastAPI
+"""FastAPI application entry point."""
+from __future__ import annotations
+from typing import Annotated
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+
+# Import our modules
+from src.rmao.api.webhooks import router
+from rmao.middleware import RateLimitMiddleware
+from rmao.core.execute import Orchestrator
+from rmao.api.webhooks import router
+from rmao.config import load_config
+from rmao.core.execute import build_orchestrator
+from rmao.middleware import RateLimitMiddleware
+
+settings = load_config()
+orchestrator = build_orchestrator(settings)
+
+app = FastAPI(
+    title="Replica-Pro Orchestrator",
+@@ -24,20 +30,21 @@
+    allow_headers=["*"],
+)
+
+# ✅ Add Rate Limiting Middleware
+app.add_middleware(RateLimitMiddleware)
+# ✅ Register Webhooks Router
+app.state.orchestrator = orchestrator
+app.include_router(router, prefix="/v1")
+
+# Health check endpoint
+@app.get("/health")
+async def health():
+    return {"status": "ok", "mode": settings.mode}
+
+# Run endpoint
+@app.post("/v1/run")
+async def run_orchestrator(query: str, tasks: int = 4):
+    orch = Orchestrator()
+    result = await orch.run(query)
+    return {"status": "success", "repo_url": result}
+async def run_orchestrator(
+    query: Annotated[str, Query(min_length=1)],
+    tasks: Annotated[int, Query(ge=1, le=16)] = 4,
+):
+    """Run orchestration and return its complete typed summary."""
+    result = await orchestrator.run(query.strip(), task_count=tasks)
+    return result.model_dump(mode="json")
+0 commit comments
+Comments
+0
+ (0)
